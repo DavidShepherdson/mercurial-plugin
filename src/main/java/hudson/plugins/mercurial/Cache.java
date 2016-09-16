@@ -165,7 +165,7 @@ class Cache {
 
             final FilePath nodeRootPath = node.getRootPath();
             if (nodeRootPath == null) {
-                throw new IOException("Cannot retrieve the root directory of the Jenkins slave node");
+                throw new IOException("Cannot retrieve the root directory of the Jenkins node");
             }
             FilePath localCaches = nodeRootPath.child("hgcache");
             FilePath localCache = localCaches.child(hash);

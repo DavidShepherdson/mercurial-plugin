@@ -120,6 +120,7 @@ public final class MercurialSCMSource extends SCMSource {
         HgExe hg = new HgExe(inst, credentials, launcher, node, listener, new EnvVars());
         try {
         String heads = hg.popen(cache, listener, true, new ArgumentListBuilder("heads", "--template", "{node} {branch}\\n"));
+        // TODO need to consider getCriteria() here as well
         Pattern p = Pattern.compile(Util.fixNull(branchPattern).length() == 0 ? ".+" : branchPattern);
         for (String line : heads.split("\r?\n")) {
             String[] nodeBranch = line.split(" ", 2);
@@ -140,7 +141,7 @@ public final class MercurialSCMSource extends SCMSource {
     @SuppressWarnings("DB_DUPLICATE_BRANCHES")
     @Override public SCM build(SCMHead head, SCMRevision revision) {
         String rev = revision == null ? head.getName() : ((MercurialRevision) revision).hash;
-        return new MercurialSCM(installation, source, revision == null ? MercurialSCM.RevisionType.BRANCH : /* TODO use CHANGESET, when defined */MercurialSCM.RevisionType.BRANCH, rev, modules, subdir, browser, clean, credentialsId, false);
+        return new MercurialSCM(installation, source, revision == null ? MercurialSCM.RevisionType.BRANCH : MercurialSCM.RevisionType.CHANGESET, rev, modules, subdir, browser, clean, credentialsId, false);
     }
 
     private @CheckForNull StandardUsernameCredentials getCredentials() {
@@ -165,7 +166,7 @@ public final class MercurialSCMSource extends SCMSource {
         }
 
         public ListBoxModel doFillCredentialsIdItems(@AncestorInPath SCMSourceOwner owner, @QueryParameter String source) {
-            if (owner == null || !owner.hasPermission(Item.CONFIGURE)) {
+            if (owner == null || !owner.hasPermission(Item.EXTENDED_READ)) {
                 return new ListBoxModel();
             }
             return new StandardUsernameListBoxModel()

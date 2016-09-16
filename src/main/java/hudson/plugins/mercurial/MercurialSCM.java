@@ -37,6 +37,7 @@ import hudson.scm.SCMRevisionState;
 import hudson.util.ArgumentListBuilder;
 import hudson.util.ForkOutputStream;
 import hudson.util.ListBoxModel;
+import hudson.util.LogTaskListener;
 import hudson.util.VersionNumber;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -111,6 +112,11 @@ public class MercurialSCM extends SCM implements Serializable {
         TAG() {
             @Override public String getDisplayName() {
                 return "Tag";
+            }
+        },
+        CHANGESET() {
+            @Override public String getDisplayName() {
+                return "Changeset";
             }
         };
         public abstract String getDisplayName();
@@ -224,7 +230,12 @@ public class MercurialSCM extends SCM implements Serializable {
     }
 
     @Override public String getKey() {
-        return "hg " + getSource(new EnvVars()) + " " + revision;
+        String base = "hg " + getSource(new EnvVars());
+        if (revisionType == RevisionType.CHANGESET) {
+            return base;
+        } else {
+            return base + " " + revision;
+        }
     }
 
     public String getCredentialsId() {
@@ -477,7 +488,7 @@ public class MercurialSCM extends SCM implements Serializable {
         try {
         ArgumentListBuilder cmd = hg.seed(true);
         cmd.add("pull");
-        if (revisionType == RevisionType.BRANCH) {
+        if (revisionType == RevisionType.BRANCH || revisionType == RevisionType.CHANGESET) { // does not work for tags
             cmd.add("--rev", revision);
         }
         CachedRepo cachedSource = cachedSource(node, env, launcher, listener, true, credentials);
@@ -801,13 +812,14 @@ public class MercurialSCM extends SCM implements Serializable {
             }
         } else {
             args.add("clone");
-            if (revisionType == RevisionType.BRANCH) {
+            if (revisionType == RevisionType.BRANCH || revisionType == RevisionType.CHANGESET) {
                 args.add("--rev", toRevision);
             }
             args.add("--noupdate");
             args.add(getSource(env));
         }
         args.add(repository.getRemote());
+        repository.mkdirs();
         int cloneExitCode;
         try {
             cloneExitCode = hg.launch(args).join();
@@ -899,7 +911,7 @@ public class MercurialSCM extends SCM implements Serializable {
         if ( build != null )
         {
             try {
-                EnvVars env = build.getEnvironment( );
+                EnvVars env = build.getEnvironment(new LogTaskListener(LOGGER, Level.INFO));
                 return workspace2Repo(workspace, env);
             } catch (IOException ex) {
                 Logger.getLogger(MercurialSCM.class.getName()).log(Level.SEVERE, null, ex);
@@ -931,12 +943,8 @@ public class MercurialSCM extends SCM implements Serializable {
         return message != null && message.startsWith("Cannot run program") && message.endsWith("No such file or directory");
     }
 
-    static boolean CACHE_LOCAL_REPOS = false;
     private @CheckForNull CachedRepo cachedSource(Node node, EnvVars env, Launcher launcher, TaskListener listener, boolean useTimeout, StandardUsernameCredentials credentials) 
             throws InterruptedException {
-        if (!CACHE_LOCAL_REPOS && getSource(env).matches("(file:|[/\\\\]).+")) {
-            return null;
-        }
         MercurialInstallation inst = findInstallation(installation);
         if (inst == null || !inst.isUseCaches()) {
             return null;
@@ -1038,7 +1046,7 @@ public class MercurialSCM extends SCM implements Serializable {
         }
 
         public ListBoxModel doFillCredentialsIdItems(@AncestorInPath Job<?,?> owner, @QueryParameter String source) {
-            if (owner == null || !owner.hasPermission(Item.CONFIGURE)) {
+            if (owner == null || !owner.hasPermission(Item.EXTENDED_READ)) {
                 return new ListBoxModel();
             }
             return new StandardUsernameListBoxModel()
